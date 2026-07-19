@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAYU·NET — Urban Air Intelligence Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Leaflet — primary CDN for the Skyline Map's live GIS layer; script.js has a runtime fallback loader (cdnjs) if this fails -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="haze-field"></div>
+<div id="toast-stack" aria-live="polite"></div>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-side">
+      <div class="brand">
+        <div class="brand-mark">V</div>
+        <div class="brand-name">VAYU<span>·NET</span></div>
+      </div>
+      <div class="login-headline">
+        <p class="eyebrow">Urban Air Intelligence</p>
+        <h1>The data already exists.<br>The acting on it didn't.</h1>
+        <p>A single intelligence layer fusing monitoring stations, satellite reads, mobility and weather feeds into source attribution, hyperlocal forecasts, enforcement priorities, and citizen advisories — for five Indian metros, live.</p>
+      </div>
+      <div class="pipeline-mini">
+        <span>DETECT</span><span>·</span><span>ATTRIBUTE</span><span>·</span><span>FORECAST</span><span>·</span><span>ACT</span>
+      </div>
+      <div class="login-footnote">CPCB · 900+ CAAQMS STATIONS REFERENCED<br>BUILT FOR ET AI HACKATHON 2026 — SMART CITIES TRACK</div>
+    </div>
+    <div class="login-form-side">
+      <div class="form-toggle">
+        <button id="tab-login" class="active">Sign in</button>
+        <button id="tab-signup">Create account</button>
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+
+      <!-- LOGIN FORM -->
+      <form id="login-form">
+        <div class="field">
+          <label for="login-user">Officer ID or email</label>
+          <input type="text" id="login-user" autocomplete="username" placeholder="officer@aqi.gov.in">
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="login-pass">Password</label>
+          <button type="button" class="pw-toggle" data-target="login-pass">show</button></div>
+          <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary">Sign in</button>
+        <button type="button" class="btn-ghost" id="demo-fill">Use demo credentials</button>
+      </form>
+
+      <!-- SIGNUP FORM -->
+      <form id="signup-form" class="hidden">
+        <div class="field">
+          <label for="signup-name">Full name</label>
+          <input type="text" id="signup-name" placeholder="Anjali Rao">
+        </div>
+        <div class="field">
+          <label for="signup-user">Officer ID or email</label>
+          <input type="text" id="signup-user" placeholder="you@city.gov.in">
+        </div>
+        <div class="field">
+          <label for="signup-city">Assigned city</label>
+          <select id="signup-city" style="width:100%;">
+            <option>Delhi</option><option>Mumbai</option><option>Kolkata</option><option>Bengaluru</option><option>Chennai</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="signup-pass">Password</label>
+          <button type="button" class="pw-toggle" data-target="signup-pass">show</button></div>
+          <input type="password" id="signup-pass" placeholder="At least 8 characters">
+        </div>
+        <button type="submit" class="btn-primary">Create account</button>
+      </form>
+
+      <div class="security-note">
+        ACCESS CONTROL — demo build: credentials are hashed (SHA-256) and held in local storage to gate the prototype. A production rollout would sit behind server-side auth (bcrypt/Argon2 + JWT sessions) and an audit log per OISD/DGMS access norms.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+
+  <div class="ticker-bar"><div class="ticker-track" id="ticker-track"></div></div>
+
+  <div id="alert-banner-zone"></div>
+  <div id="toast-zone"></div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="brand-mark" style="width:28px;height:28px;font-size:13px;">V</div>
+      <div class="brand-name">VAYU<span style="color:var(--haze-soft);">·NET</span></div>
+    </div>
+    <div class="session-pill">
+      <div class="avatar" id="user-initial">A</div>
+      <span id="user-name-label">—</span>
+      <button class="btn-logout" id="logout-btn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <nav class="rail">
+      <div class="rail-label">Command</div>
+      <button class="rail-item active" data-module="overview"><span class="ic">◉</span> Overview</button>
+      <div class="rail-label">Instruments</div>
+      <button class="rail-item" data-module="map"><span class="ic">⬡</span> Skyline Map</button>
+      <button class="rail-item" data-module="forecast"><span class="ic">∿</span> Forecast</button>
+      <button class="rail-item" data-module="attribution"><span class="ic">◐</span> Source Trace</button>
+      <button class="rail-item" data-module="enforcement"><span class="ic">▣</span> Enforcement Queue</button>
+      <button class="rail-item" data-module="compare"><span class="ic">⇕</span> City Compare</button>
+      <button class="rail-item" data-module="advisory"><span class="ic">✉</span> Citizen Advisory</button>
+      <div class="rail-label">Simulation</div>
+      <button class="rail-item" data-module="simulator"><span class="ic">⚙</span> Intervention Simulator</button>
+      <button class="rail-item" data-module="timemachine"><span class="ic">◷</span> Time Machine</button>
+      <button class="rail-item" data-module="twin"><span class="ic">▦</span> Digital Twin</button>
+      <div class="rail-label">Intelligence</div>
+      <button class="rail-item" data-module="score"><span class="ic">★</span> City Score &amp; Carbon</button>
+      <button class="rail-item" data-module="reports"><span class="ic">⚠</span> Reports &amp; Alerts</button>
+      <div class="rail-label">AI Systems</div>
+      <button class="rail-item" data-module="chat"><span class="ic">✦</span> AI Copilot</button>
+    </nav>
+
+    <main class="main">
+      <!-- OVERVIEW -->
+      <section class="module active" id="mod-overview"></section>
+      <!-- MAP -->
+      <section class="module" id="mod-map"></section>
+      <!-- FORECAST -->
+      <section class="module" id="mod-forecast"></section>
+      <!-- ATTRIBUTION -->
+      <section class="module" id="mod-attribution"></section>
+      <!-- ENFORCEMENT -->
+      <section class="module" id="mod-enforcement"></section>
+      <!-- COMPARE -->
+      <section class="module" id="mod-compare"></section>
+      <!-- ADVISORY -->
+      <section class="module" id="mod-advisory"></section>
+      <!-- INTERVENTION SIMULATOR -->
+      <section class="module" id="mod-simulator"></section>
+      <!-- POLLUTION TIME MACHINE -->
+      <section class="module" id="mod-timemachine"></section>
+      <!-- SMART CITY DIGITAL TWIN -->
+      <section class="module" id="mod-twin"></section>
+      <!-- CITY SCORE & CARBON DASHBOARD -->
+      <section class="module" id="mod-score"></section>
+      <!-- REPORTS & ALERTS -->
+      <section class="module" id="mod-reports"></section>
+      <!-- AI COPILOT CHAT -->
+      <section class="module" id="mod-chat">
+        <div class="module-head">
+          <p class="eyebrow">Strategic Decision System</p>
+          <h2>VAYU·NET AI Copilot <span class="api-badge" id="ai-status">Ready</span></h2>
+          <p>An intelligent systems agent designed to query live monitoring telemetry, draft enforcement actions under GRAP directives, or translate municipal guidelines into citizen action plans.</p>
+        </div>
+
+        <div class="panel-box" style="margin-bottom:18px;">
+          <p class="eyebrow" style="margin-bottom:10px; color:var(--paper-dim);">AI Configuration API</p>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="text" id="api-key-input" placeholder="Paste your Hugging Face (HF_TOKEN) or Gemini API Key here (optional)" style="flex:1;">
+            <select id="api-provider" style="width:160px;">
+              <option value="fallback">Local Advisor Model</option>
+              <option value="huggingface">Hugging Face API</option>
+              <option value="gemini">Google Gemini API</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-box" style="margin-bottom:18px;">
+          <p class="eyebrow" style="margin-bottom:12px; color:var(--paper-dim);">Multi-agent workflow</p>
+          <div class="agent-network" id="agent-network"></div>
+          <div class="agent-log" id="agent-log"></div>
+        </div>
+
+        <div class="chat-container">
+          <div class="chat-window" id="chat-window">
+            <div class="chat-bubble assistant">
+              Greetings Officer. I am the VAYU·NET intelligence agent. I can cross-reference our active real-time data grids, weather sensors, and the enforcement queue.
+              <br><br>
+              How can I assist your municipal strategy today? Feel free to try any of the quick queries below!
+            </div>
+          </div>
+          <div class="chat-presets" id="chat-presets">
+            <button data-prompt="Analyze Delhi's dominant emission sources and suggest an active enforcement protocol under GRAP Stage III.">Delhi GRAP Protocol</button>
+            <button data-prompt="Draft a public health warning for sensitive groups in Bengaluru Whitefield ward in Kannada.">Bengaluru Advisory (KN)</button>
+            <button data-prompt="Review our current industrial enforcement priorities. Which city requires immediate localized intervention?">Audit Enforcement Queue</button>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-user-input" placeholder="Query agent regarding air regulations, spatial correlation, or mitigation drafts...">
+            <button id="chat-send-btn">Transmit</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="appfoot">
+    <span>VAYU·NET — Urban Air Intelligence Command Center · Live Sensor Framework</span>
+    <span id="clock-foot">—</span>
+  </footer>
+</div>
+
+<!-- Chart.js — primary CDN; script.js has a runtime fallback loader if this fails -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Leaflet JS — primary CDN; script.js has a runtime fallback loader (cdnjs) if this fails -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- jsPDF + SheetJS — primary CDN for the Report Generator (PDF / Excel export); script.js has a runtime fallback loader (cdnjs) if these fail -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
